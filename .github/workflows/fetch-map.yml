@@ -26,6 +26,27 @@ jobs:
           echo "yearmonth=$YEAR_MONTH" >> $GITHUB_OUTPUT
           echo "Target file: $TOMORROW in folder $YEAR_MONTH"
 
+      -name: Sanity test - download known-good URL
+        id: sanity
+        run: |
+          KNOWN_URL="https://civilprotection.gov.gr/sites/default/files/2025-10/251031.jpg"
+          echo "Sanity test against known-good URL: $KNOWN_URL"
+          HTTP_CODE=$(curl -sS -o sanity.jpg -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: image/avif,image/webp,*/*" \
+            -H "Referer: https://civilprotection.gov.gr/xartis" \
+            "$KNOWN_URL")
+          echo "Sanity HTTP: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ GitHub Actions can reach civilprotection.gov.gr"
+            echo "Downloaded $(stat -c%s sanity.jpg) bytes"
+            rm -f sanity.jpg
+          else
+            echo "❌ GitHub Actions BLOCKED by Akamai (HTTP $HTTP_CODE)"
+            cat sanity.jpg | head -20 || true
+            exit 1
+          fi
+
       - name: Download map from civilprotection.gov.gr
         id: download
         run: |
