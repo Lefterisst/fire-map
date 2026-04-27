@@ -25,7 +25,7 @@ jobs:
           echo "tomorrow=$TOMORROW" >> $GITHUB_OUTPUT
           echo "yearmonth=$YEAR_MONTH" >> $GITHUB_OUTPUT
           echo "Target file: $TOMORROW in folder $YEAR_MONTH"
-
+          
       -name: Sanity test - download known-good URL
         id: sanity
         run: |
