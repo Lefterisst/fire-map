@@ -1,0 +1,57 @@
+name: Fetch Fire Risk Map
+
+on:
+  schedule:
+    # Τρέχει 11:30, 13:30, 15:30, 17:30 ώρα Αθήνας (UTC+3 το καλοκαίρι, UTC+2 χειμώνα)
+    # Cron σε UTC: 8:30, 10:30, 12:30, 14:30
+    - cron: '30 8,10,12,14 * * *'
+  workflow_dispatch:  # επιτρέπει manual run από το UI
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Compute target date (tomorrow Athens time)
+        id: date
+        run: |
+          export TZ='Europe/Athens'
+          TOMORROW=$(date -d 'tomorrow' +%y%m%d)
+          YEAR_MONTH=$(date -d 'tomorrow' +%Y-%m)
+          echo "tomorrow=$TOMORROW" >> $GITHUB_OUTPUT
+          echo "yearmonth=$YEAR_MONTH" >> $GITHUB_OUTPUT
+          echo "Target file: $TOMORROW in folder $YEAR_MONTH"
+
+      - name: Download map from civilprotection.gov.gr
+        id: download
+        run: |
+          URL="https://civilprotection.gov.gr/sites/default/files/${{ steps.date.outputs.yearmonth }}/${{ steps.date.outputs.tomorrow }}.jpg"
+          echo "Trying: $URL"
+          HTTP_CODE=$(curl -sS -o today.jpg -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: image/avif,image/webp,*/*" \
+            -H "Referer: https://civilprotection.gov.gr/xartis" \
+            "$URL")
+          echo "HTTP: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Predicted URL failed with $HTTP_CODE — keeping previous today.jpg"
+            git checkout today.jpg 2>/dev/null || echo "No previous file to restore"
+            exit 0
+          fi
+          echo "Downloaded $(stat -c%s today.jpg) bytes"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet today.jpg 2>/dev/null; then
+            echo "No changes — skipping commit"
+            exit 0
+          fi
+          git add today.jpg
+          git commit -m "Update fire risk map $(TZ='Europe/Athens' date +'%Y-%m-%d %H:%M')" || echo "Nothing to commit"
+          git push
